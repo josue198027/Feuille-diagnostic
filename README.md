@@ -3,7 +3,7 @@
 
 Application web qui détecte automatiquement si une feuille de pomme de terre est saine ou atteinte d'une maladie (mildiou précoce ou tardif), à partir d'une simple photo. Le modèle de Deep Learning tourne directement dans le navigateur grâce à TensorFlow.js, sans serveur ni envoi de données.
 
-**Démo en ligne :** https://tonpseudo.github.io/leaf-diagnostic/
+**Démo en ligne :** https://josue198027.github.io/Feuille-diagnostic/
 
 ---
 
