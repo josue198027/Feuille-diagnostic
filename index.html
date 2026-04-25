@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnostic des feuilles de pomme de terre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- TensorFlow.js pour charger et utiliser le modèle directement dans le navigateur -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+
+<style>
+/* ============================================================
+   Variables de couleur - Palette botanique / terre cuite
+   ============================================================ */
+:root {
+    --fond: #f5f1ea;
+    --fond-carte: #fdfbf6;
+    --vert-profond: #2d4a2b;
+    --vert-moyen: #5a7d4f;
+    --vert-clair: #8ba77c;
+    --vert-pastel: #d8e3cf;
+    --rouge-terre: #a04c3c;
+    --rouge-clair: #e8c7bf;
+    --terre: #6b4423;
+    --creme: #ebe2d1;
+    --texte: #2b2520;
+    --texte-doux: #6b5f52;
+    --bordure: rgba(45, 74, 43, 0.15);
+    --ombre: 0 2px 20px rgba(45, 74, 43, 0.08);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    color: var(--texte);
+    background: var(--fond);
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+        radial-gradient(circle at 20% 30%, rgba(139, 167, 124, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(160, 76, 60, 0.05) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ============================================================
+   Statut de chargement du modèle
+   ============================================================ */
+.banniere-statut {
+    padding: 0.7rem 2rem;
+    text-align: center;
+    font-size: 0.9rem;
+    position: relative;
+    z-index: 10;
+    transition: all 0.4s;
+}
+
+.banniere-statut.chargement {
+    background: var(--creme);
+    color: var(--vert-profond);
+}
+
+.banniere-statut.pret {
+    background: var(--vert-pastel);
+    color: var(--vert-profond);
+}
+
+.banniere-statut.erreur {
+    background: var(--rouge-clair);
+    color: var(--rouge-terre);
+}
+
+.banniere-statut code {
+    background: rgba(0, 0, 0, 0.1);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+}
+
+/* ============================================================
+   En-tête
+   ============================================================ */
+.entete {
+    padding: 1.5rem 2rem;
+    position: relative;
+    z-index: 5;
+    border-bottom: 1px solid var(--bordure);
+    background: rgba(253, 251, 246, 0.7);
+    backdrop-filter: blur(10px);
+}
+
+.conteneur-entete {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: 'Fraunces', serif;
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--vert-profond);
+    letter-spacing: -0.02em;
+}
+
+.icone-feuille {
+    width: 28px;
+    height: 28px;
+    color: var(--vert-moyen);
+}
+
+.badge-modele {
+    font-size: 0.8rem;
+    color: var(--vert-moyen);
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--vert-clair);
+    border-radius: 100px;
+    letter-spacing: 0.02em;
+    font-weight: 500;
+}
+
+/* ============================================================
+   Contenu
+   ============================================================ */
+.contenu {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+    position: relative;
+    z-index: 1;
+}
+
+.hero {
+    text-align: center;
+    margin-bottom: 4rem;
+    animation: fadeInUp 0.7s ease-out;
+}
+
+.sous-titre {
+    font-size: 0.85rem;
+    color: var(--texte-doux);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 1.2rem;
+}
+
+.titre-principal {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(2.2rem, 5vw, 3.8rem);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    color: var(--vert-profond);
+    margin-bottom: 1.5rem;
+}
+
+.accent {
+    font-style: italic;
+    color: var(--rouge-terre);
+    font-weight: 400;
+}
+
+.description {
+    font-size: 1.1rem;
+    color: var(--texte-doux);
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.7;
+}
+
+/* ============================================================
+   Upload
+   ============================================================ */
+.zone-upload {
+    margin-bottom: 4rem;
+    animation: fadeInUp 0.9s ease-out;
+}
+
+.boite-depot {
+    background: var(--fond-carte);
+    border: 2px dashed var(--vert-clair);
+    border-radius: 18px;
+    padding: 3.5rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.boite-depot:hover {
+    border-color: var(--vert-moyen);
+    background: #fffefa;
+    transform: translateY(-2px);
+    box-shadow: var(--ombre);
+}
+
+.boite-depot.survole {
+    border-color: var(--vert-moyen);
+    background: var(--vert-pastel);
+    border-style: solid;
+}
+
+.boite-depot.desactive {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.contenu-depot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.icone-upload {
+    width: 56px;
+    height: 56px;
+    background: var(--vert-pastel);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.8rem;
+    color: var(--vert-moyen);
+}
+
+.icone-upload svg { width: 24px; height: 24px; }
+
+.texte-depot-principal {
+    font-family: 'Fraunces', serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--vert-profond);
+}
+
+.texte-depot-secondaire {
+    color: var(--texte-doux);
+    font-size: 0.95rem;
+}
+
+.formats-acceptes {
+    font-size: 0.8rem;
+    color: var(--texte-doux);
+    margin-top: 0.8rem;
+    opacity: 0.7;
+    letter-spacing: 0.05em;
+}
+
+.apercu-image {
+    position: relative;
+    max-width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+
+/* Force le masquage des éléments avec l'attribut hidden.
+   Sans cette règle, display: flex/grid annule l'effet de hidden. */
+[hidden] {
+    display: none !important;
+}
+
+.apercu-image img {
+    max-width: 100%;
+    max-height: 400px;
+    border-radius: 12px;
+    object-fit: contain;
+    box-shadow: 0 8px 30px rgba(45, 74, 43, 0.15);
+}
+
+.bouton-fermer {
+    position: absolute;
+    top: -10px;
+    right: calc(50% - 220px);
+    background: var(--rouge-terre);
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(160, 76, 60, 0.3);
+    transition: all 0.2s;
+    z-index: 2;
+}
+
+.bouton-fermer:hover { transform: rotate(90deg) scale(1.1); }
+.bouton-fermer svg { width: 18px; height: 18px; }
+
+.bouton-analyser {
+    margin: 2rem auto 0;
+    background: var(--vert-profond);
+    color: var(--creme);
+    border: none;
+    padding: 1.1rem 3rem;
+    font-size: 1.05rem;
+    font-family: inherit;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+}
+
+.bouton-analyser:disabled {
+    background: var(--bordure);
+    color: var(--texte-doux);
+    cursor: not-allowed;
+}
+
+.bouton-analyser:not(:disabled):hover {
+    background: var(--vert-moyen);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(45, 74, 43, 0.25);
+}
+
+.spinner {
+    width: 18px;
+    height: 18px;
+    border: 2.5px solid var(--creme);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: tourner 0.8s linear infinite;
+}
+
+@keyframes tourner { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   Résultat
+   ============================================================ */
+.zone-resultat {
+    margin-bottom: 4rem;
+    animation: fadeInUp 0.5s ease-out;
+}
+
+.carte-resultat {
+    background: var(--fond-carte);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: var(--ombre);
+    border: 1px solid var(--bordure);
+}
+
+.entete-resultat {
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--bordure);
+    background: var(--creme);
+}
+
+.entete-resultat h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 1.6rem;
+    color: var(--vert-profond);
+    font-weight: 600;
+}
+
+.statut {
+    padding: 0.4rem 1rem;
+    border-radius: 100px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.statut.saine { background: var(--vert-pastel); color: var(--vert-profond); }
+.statut.malade { background: var(--rouge-clair); color: var(--rouge-terre); }
+
+.corps-resultat {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    padding: 2rem;
+}
+
+.image-analysee {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: var(--fond);
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 250px;
+}
+
+.image-analysee img {
+    max-width: 100%;
+    max-height: 350px;
+    object-fit: contain;
+}
+
+.details-resultat {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.bloc-classe, .bloc-confiance {
+    padding-bottom: 1.2rem;
+    border-bottom: 1px solid var(--bordure);
+}
+
+.etiquette-classe, .etiquette-confiance {
+    font-size: 0.75rem;
+    color: var(--texte-doux);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.4rem;
+}
+
+.valeur-classe {
+    font-family: 'Fraunces', serif;
+    font-size: 2.2rem;
+    font-weight: 600;
+    color: var(--vert-profond);
+    line-height: 1.1;
+}
+
+.valeur-classe.malade-texte { color: var(--rouge-terre); }
+
+.barre-confiance {
+    height: 8px;
+    background: var(--creme);
+    border-radius: 100px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.remplissage-confiance {
+    height: 100%;
+    background: linear-gradient(90deg, var(--vert-clair), var(--vert-moyen));
+    border-radius: 100px;
+    width: 0%;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.remplissage-confiance.malade {
+    background: linear-gradient(90deg, var(--rouge-clair), var(--rouge-terre));
+}
+
+.pourcentage-confiance {
+    font-family: 'Fraunces', serif;
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--texte);
+}
+
+.bloc-probabilites {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.ligne-proba {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.9rem;
+    background: var(--fond);
+    border-radius: 8px;
+}
+
+.nom-classe { font-size: 0.95rem; color: var(--texte-doux); }
+
+.valeur-proba {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    color: var(--vert-profond);
+}
+
+.bouton-recommencer {
+    margin-top: 0.5rem;
+    background: transparent;
+    border: 1.5px solid var(--vert-moyen);
+    color: var(--vert-profond);
+    padding: 0.8rem 1.5rem;
+    border-radius: 100px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    align-self: flex-start;
+}
+
+.bouton-recommencer:hover {
+    background: var(--vert-profond);
+    color: var(--creme);
+}
+
+/* ============================================================
+   Résultats multiples
+   ============================================================ */
+.zone-resultats-multiples {
+    margin-bottom: 4rem;
+    animation: fadeInUp 0.5s ease-out;
+}
+
+.titre-resultats {
+    font-family: 'Fraunces', serif;
+    font-size: 2rem;
+    color: var(--vert-profond);
+    margin-bottom: 1.5rem;
+    font-weight: 600;
+}
+
+.grille-resultats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 2rem;
+}
+
+.carte-mini {
+    background: var(--fond-carte);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--ombre);
+    border: 1px solid var(--bordure);
+    transition: transform 0.2s;
+}
+
+.carte-mini:hover { transform: translateY(-3px); }
+
+.carte-mini img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+}
+
+.info-mini { padding: 1rem; }
+
+.classe-mini {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--vert-profond);
+    margin-bottom: 0.3rem;
+}
+
+.classe-mini.malade { color: var(--rouge-terre); }
+
+.confiance-mini {
+    font-size: 0.85rem;
+    color: var(--texte-doux);
+}
+
+/* ============================================================
+   Cartes info
+   ============================================================ */
+.info-modele {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.carte-info {
+    background: var(--fond-carte);
+    padding: 2rem;
+    border-radius: 14px;
+    border: 1px solid var(--bordure);
+    transition: all 0.3s;
+}
+
+.carte-info:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--ombre);
+    border-color: var(--vert-clair);
+}
+
+.numero-info {
+    font-family: 'Fraunces', serif;
+    font-size: 2rem;
+    color: var(--vert-clair);
+    margin-bottom: 0.8rem;
+    font-weight: 400;
+    font-style: italic;
+}
+
+.carte-info h3 {
+    font-family: 'Fraunces', serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--vert-profond);
+    margin-bottom: 0.6rem;
+}
+
+.carte-info p {
+    color: var(--texte-doux);
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.pied-page {
+    padding: 2rem;
+    text-align: center;
+    border-top: 1px solid var(--bordure);
+    color: var(--texte-doux);
+    font-size: 0.9rem;
+    background: var(--fond-carte);
+    margin-top: 4rem;
+}
+
+.credit-equipe {
+    font-size: 0.8rem;
+    margin-top: 0.4rem;
+    opacity: 0.7;
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 768px) {
+    .corps-resultat { grid-template-columns: 1fr; }
+    .entete { padding: 1rem; }
+    .contenu { padding: 2rem 1.2rem; }
+    .conteneur-entete { flex-direction: column; gap: 0.8rem; }
+    .bouton-fermer { right: 10px; }
+    .hero { margin-bottom: 2.5rem; }
+    .boite-depot { padding: 2.5rem 1.5rem; min-height: 240px; }
+}
+</style>
+</head>
+<body>
+
+<div class="banniere-statut chargement" id="banniereStatut">
+    Chargement du modèle en cours...
+</div>
+
+<header class="entete">
+    <div class="conteneur-entete">
+        <div class="logo">
+            <svg class="icone-feuille" viewBox="0 0 24 24" fill="none">
+                <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3c.5.12 1 .2 1.5.2C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8z" fill="currentColor"/>
+            </svg>
+            <span>Leaf Diagnostic</span>
+        </div>
+        <div class="badge-modele">CNN · 98% de précision</div>
+    </div>
+</header>
+
+<main class="contenu">
+
+    <section class="hero">
+        <p class="sous-titre">Mini-projet UA3 · College La Cité</p>
+        <h1 class="titre-principal">
+            Dépose une feuille,<br>
+            <span class="accent">obtiens un diagnostic.</span>
+        </h1>
+        <p class="description">
+            Notre réseau de neurones convolutif analyse une photo de feuille
+            de pomme de terre et t'indique si elle est saine ou atteinte
+            d'une maladie (mildiou précoce ou tardif).
+        </p>
+    </section>
+
+    <section class="zone-upload">
+        <div class="boite-depot desactive" id="boiteDepot">
+            <input type="file" id="champFichier" accept="image/*" multiple hidden>
+
+            <div class="contenu-depot" id="contenuDepot">
+                <div class="icone-upload">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <p class="texte-depot-principal">Glisse une image ici</p>
+                <p class="texte-depot-secondaire">ou clique pour parcourir tes fichiers</p>
+                <p class="formats-acceptes">PNG · JPG · JPEG · BMP · WEBP</p>
+            </div>
+
+            <div class="apercu-image" id="apercuImage" hidden>
+                <img id="imageApercu" src="" alt="Aperçu">
+                <button class="bouton-fermer" id="boutonFermer" aria-label="Enlever l'image">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <button class="bouton-analyser" id="boutonAnalyser" disabled>
+            <span class="texte-bouton">Analyser l'image</span>
+            <span class="spinner" hidden></span>
+        </button>
+    </section>
+
+    <section class="zone-resultat" id="zoneResultat" hidden>
+        <div class="carte-resultat">
+            <div class="entete-resultat">
+                <h2>Diagnostic</h2>
+                <span class="statut" id="statutResultat"></span>
+            </div>
+            <div class="corps-resultat">
+                <div class="image-analysee">
+                    <img id="imageAnalysee" src="" alt="Feuille analysée">
+                </div>
+                <div class="details-resultat">
+                    <div class="bloc-classe">
+                        <p class="etiquette-classe">Classe prédite</p>
+                        <p class="valeur-classe" id="valeurClasse">—</p>
+                    </div>
+                    <div class="bloc-confiance">
+                        <p class="etiquette-confiance">Confiance du modèle</p>
+                        <div class="barre-confiance">
+                            <div class="remplissage-confiance" id="remplissageConfiance"></div>
+                        </div>
+                        <p class="pourcentage-confiance" id="pourcentageConfiance">0%</p>
+                    </div>
+                    <div class="bloc-probabilites">
+                        <div class="ligne-proba">
+                            <span class="nom-classe">Saine</span>
+                            <span class="valeur-proba" id="probaSaine">0%</span>
+                        </div>
+                        <div class="ligne-proba">
+                            <span class="nom-classe">Malade</span>
+                            <span class="valeur-proba" id="probaMalade">0%</span>
+                        </div>
+                    </div>
+                    <button class="bouton-recommencer" id="boutonRecommencer">
+                        Analyser une autre image
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="zone-resultats-multiples" id="zoneResultatsMultiples" hidden>
+        <h2 class="titre-resultats">Résultats de l'analyse</h2>
+        <div class="grille-resultats" id="grilleResultats"></div>
+        <button class="bouton-recommencer" id="boutonRecommencerBatch">Recommencer</button>
+    </section>
+
+    <section class="info-modele">
+        <div class="carte-info">
+            <div class="numero-info">01</div>
+            <h3>Classe binaire</h3>
+            <p>Le modèle distingue deux classes : feuilles saines et feuilles malades (mildiou précoce ou tardif fusionnés).</p>
+        </div>
+        <div class="carte-info">
+            <div class="numero-info">02</div>
+            <h3>CNN sur mesure</h3>
+            <p>Quatre blocs convolutifs, du Dropout à plusieurs niveaux, optimiseur Adam avec un learning rate de 0,001.</p>
+        </div>
+        <div class="carte-info">
+            <div class="numero-info">03</div>
+            <h3>Tout dans le navigateur</h3>
+            <p>Le modèle tourne directement chez toi grâce à TensorFlow.js. Aucune image n'est envoyée sur un serveur.</p>
+        </div>
+    </section>
+
+</main>
+
+<footer class="pied-page">
+    <p>Mini-projet IA · UA3 · College La Cité</p>
+    <p class="credit-equipe">Équipe : Félicité Djieukam · Josué Joachim · Leila Toundji · Gilyns E. Dorsaint · Ourega Isidore Dago</p>
+</footer>
+
+<script>
+// ============================================================
+// Configuration du modèle
+// ============================================================
+
+// Chemin vers le modèle TensorFlow.js (dossier contenant model.json)
+const CHEMIN_MODELE = "./web_model/model.json";
+
+// Paramètres identiques à ceux du notebook
+const TAILLE_IMAGE = 128;
+
+// Mapping des classes - Keras trie par ordre alphabétique
+// Diseased = 0, Healthy = 1
+// Le sigmoid sort une probabilité : proche de 1 = Healthy, proche de 0 = Diseased
+
+let modele = null;
+
+// ============================================================
+// Références DOM
+// ============================================================
+
+const banniereStatut = document.getElementById("banniereStatut");
+const boiteDepot = document.getElementById("boiteDepot");
+const champFichier = document.getElementById("champFichier");
+const contenuDepot = document.getElementById("contenuDepot");
+const apercuImage = document.getElementById("apercuImage");
+const imageApercu = document.getElementById("imageApercu");
+const boutonFermer = document.getElementById("boutonFermer");
+const boutonAnalyser = document.getElementById("boutonAnalyser");
+const texteBouton = boutonAnalyser.querySelector(".texte-bouton");
+const spinner = boutonAnalyser.querySelector(".spinner");
+
+const zoneResultat = document.getElementById("zoneResultat");
+const zoneResultatsMultiples = document.getElementById("zoneResultatsMultiples");
+const grilleResultats = document.getElementById("grilleResultats");
+
+const imageAnalysee = document.getElementById("imageAnalysee");
+const statutResultat = document.getElementById("statutResultat");
+const valeurClasse = document.getElementById("valeurClasse");
+const remplissageConfiance = document.getElementById("remplissageConfiance");
+const pourcentageConfiance = document.getElementById("pourcentageConfiance");
+const probaSaine = document.getElementById("probaSaine");
+const probaMalade = document.getElementById("probaMalade");
+const boutonRecommencer = document.getElementById("boutonRecommencer");
+const boutonRecommencerBatch = document.getElementById("boutonRecommencerBatch");
+
+let fichiersSelectionnes = [];
+
+// ============================================================
+// Chargement du modèle au démarrage
+// ============================================================
+
+async function chargerModele() {
+    try {
+        modele = await tf.loadGraphModel(CHEMIN_MODELE);
+        // On fait tourner le modèle à vide une fois pour l'initialiser
+        const tenseurVide = tf.zeros([1, TAILLE_IMAGE, TAILLE_IMAGE, 3]);
+        modele.predict(tenseurVide);
+        tenseurVide.dispose();
+
+        banniereStatut.className = "banniere-statut pret";
+        banniereStatut.textContent = "Modèle chargé. Tu peux déposer une image.";
+
+        boiteDepot.classList.remove("desactive");
+
+        // On cache la bannière au bout de 2 secondes
+        setTimeout(() => {
+            banniereStatut.style.opacity = "0";
+            banniereStatut.style.height = "0";
+            banniereStatut.style.padding = "0";
+            banniereStatut.style.overflow = "hidden";
+        }, 2000);
+
+    } catch (err) {
+        banniereStatut.className = "banniere-statut erreur";
+        banniereStatut.innerHTML = `
+            Modèle introuvable. Détail : <code>${err.message}</code>.
+            Ouvre la console (F12) pour plus d'infos.
+        `;
+        console.error("Erreur de chargement du modèle :", err);
+        console.error("Chemin tenté :", CHEMIN_MODELE);
+    }
+}
+
+chargerModele();
+
+// ============================================================
+// Drag and drop
+// ============================================================
+
+["dragenter", "dragover"].forEach(evt => {
+    boiteDepot.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        boiteDepot.classList.add("survole");
+    });
+});
+
+["dragleave", "drop"].forEach(evt => {
+    boiteDepot.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        boiteDepot.classList.remove("survole");
+    });
+});
+
+boiteDepot.addEventListener("drop", (e) => {
+    const fichiers = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+    if (fichiers.length > 0) traiterFichiers(fichiers);
+});
+
+boiteDepot.addEventListener("click", (e) => {
+    if (e.target.closest(".bouton-fermer")) return;
+    champFichier.click();
+});
+
+champFichier.addEventListener("change", (e) => {
+    const fichiers = Array.from(e.target.files);
+    if (fichiers.length > 0) traiterFichiers(fichiers);
+});
+
+// ============================================================
+// Sélection d'images
+// ============================================================
+
+function traiterFichiers(fichiers) {
+    const valides = fichiers.filter(f => f.size <= 10 * 1024 * 1024);
+    if (valides.length === 0) return;
+
+    fichiersSelectionnes = valides;
+
+    const lecteur = new FileReader();
+    lecteur.onload = (e) => {
+        imageApercu.src = e.target.result;
+        contenuDepot.hidden = true;
+        apercuImage.hidden = false;
+    };
+    lecteur.readAsDataURL(valides[0]);
+
+    boutonAnalyser.disabled = false;
+    texteBouton.textContent = valides.length === 1
+        ? "Analyser l'image"
+        : `Analyser les ${valides.length} images`;
+
+    zoneResultat.hidden = true;
+    zoneResultatsMultiples.hidden = true;
+}
+
+boutonFermer.addEventListener("click", (e) => {
+    e.stopPropagation();
+    reinitialiser();
+});
+
+function reinitialiser() {
+    fichiersSelectionnes = [];
+    champFichier.value = "";
+    imageApercu.src = "";
+    contenuDepot.hidden = false;
+    apercuImage.hidden = true;
+    boutonAnalyser.disabled = true;
+    texteBouton.textContent = "Analyser l'image";
+    zoneResultat.hidden = true;
+    zoneResultatsMultiples.hidden = true;
+}
+
+// ============================================================
+// Préparation de l'image pour le modèle
+// ============================================================
+
+function chargerImage(fichier) {
+    return new Promise((resolve, reject) => {
+        const lecteur = new FileReader();
+        lecteur.onload = (e) => {
+            const img = new Image();
+            img.onload = () => resolve({ img, dataURL: e.target.result });
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        lecteur.onerror = reject;
+        lecteur.readAsDataURL(fichier);
+    });
+}
+
+function predire(img) {
+    // tf.tidy libère automatiquement les tenseurs temporaires
+    return tf.tidy(() => {
+        // Conversion de l'image en tenseur + redimensionnement 128x128
+        let tenseur = tf.browser.fromPixels(img);
+        tenseur = tf.image.resizeBilinear(tenseur, [TAILLE_IMAGE, TAILLE_IMAGE]);
+
+        // Normalisation /255 (comme dans le notebook)
+        tenseur = tenseur.div(255.0);
+
+        // Ajout de la dimension batch
+        tenseur = tenseur.expandDims(0);
+
+        // Prédiction
+        const sortie = modele.predict(tenseur);
+        return sortie.dataSync()[0];
+    });
+}
+
+function formaterResultat(probaBrute) {
+    // Proba sigmoid : proche de 1 = Healthy, proche de 0 = Diseased
+    const estSaine = probaBrute > 0.5;
+    const confiance = estSaine ? probaBrute : (1 - probaBrute);
+
+    return {
+        classe_en: estSaine ? "Healthy" : "Diseased",
+        classe_fr: estSaine ? "Saine" : "Malade",
+        confiance: confiance * 100,
+        probaSaine: probaBrute * 100,
+        probaMalade: (1 - probaBrute) * 100
+    };
+}
+
+// ============================================================
+// Lancement de l'analyse
+// ============================================================
+
+boutonAnalyser.addEventListener("click", async () => {
+    if (fichiersSelectionnes.length === 0 || !modele) return;
+
+    basculerChargement(true);
+
+    try {
+        if (fichiersSelectionnes.length === 1) {
+            await analyserUneImage(fichiersSelectionnes[0]);
+        } else {
+            await analyserPlusieursImages(fichiersSelectionnes);
+        }
+    } catch (err) {
+        alert("Erreur : " + err.message);
+        console.error(err);
+    } finally {
+        basculerChargement(false);
+    }
+});
+
+function basculerChargement(active) {
+    boutonAnalyser.disabled = active;
+    if (active) {
+        texteBouton.textContent = "Analyse en cours...";
+        spinner.hidden = false;
+    } else {
+        spinner.hidden = true;
+    }
+}
+
+async function analyserUneImage(fichier) {
+    const { img, dataURL } = await chargerImage(fichier);
+    const probaBrute = predire(img);
+    const resultat = formaterResultat(probaBrute);
+    afficherResultatUnique(resultat, dataURL);
+}
+
+function afficherResultatUnique(res, dataURL) {
+    imageAnalysee.src = dataURL;
+
+    const estMalade = res.classe_en === "Diseased";
+    valeurClasse.textContent = res.classe_fr;
+    valeurClasse.classList.toggle("malade-texte", estMalade);
+
+    statutResultat.textContent = estMalade ? "Attention" : "Tout va bien";
+    statutResultat.className = "statut " + (estMalade ? "malade" : "saine");
+
+    remplissageConfiance.classList.toggle("malade", estMalade);
+    setTimeout(() => {
+        remplissageConfiance.style.width = res.confiance + "%";
+    }, 100);
+    pourcentageConfiance.textContent = res.confiance.toFixed(1) + " %";
+
+    probaSaine.textContent = res.probaSaine.toFixed(1) + " %";
+    probaMalade.textContent = res.probaMalade.toFixed(1) + " %";
+
+    zoneResultat.hidden = false;
+    zoneResultatsMultiples.hidden = true;
+
+    setTimeout(() => {
+        zoneResultat.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 200);
+}
+
+async function analyserPlusieursImages(fichiers) {
+    const resultats = [];
+    for (const fichier of fichiers) {
+        try {
+            const { img, dataURL } = await chargerImage(fichier);
+            const probaBrute = predire(img);
+            const res = formaterResultat(probaBrute);
+            resultats.push({ ...res, dataURL, nom: fichier.name });
+        } catch (err) {
+            resultats.push({ erreur: err.message, nom: fichier.name });
+        }
+    }
+    afficherResultatsBatch(resultats);
+}
+
+function afficherResultatsBatch(resultats) {
+    grilleResultats.innerHTML = "";
+
+    resultats.forEach(res => {
+        const carte = document.createElement("div");
+        carte.className = "carte-mini";
+
+        if (res.erreur) {
+            carte.innerHTML = `
+                <div class="info-mini">
+                    <div class="classe-mini malade">Erreur</div>
+                    <div class="confiance-mini">${res.nom} : ${res.erreur}</div>
+                </div>
+            `;
+        } else {
+            const estMalade = res.classe_en === "Diseased";
+            carte.innerHTML = `
+                <img src="${res.dataURL}" alt="${res.nom}">
+                <div class="info-mini">
+                    <div class="classe-mini ${estMalade ? "malade" : ""}">${res.classe_fr}</div>
+                    <div class="confiance-mini">Confiance : ${res.confiance.toFixed(1)} %</div>
+                </div>
+            `;
+        }
+        grilleResultats.appendChild(carte);
+    });
+
+    zoneResultatsMultiples.hidden = false;
+    zoneResultat.hidden = true;
+
+    setTimeout(() => {
+        zoneResultatsMultiples.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 200);
+}
+
+// ============================================================
+// Boutons "Recommencer"
+// ============================================================
+
+boutonRecommencer.addEventListener("click", () => {
+    reinitialiser();
+    boiteDepot.scrollIntoView({ behavior: "smooth", block: "center" });
+});
+
+boutonRecommencerBatch.addEventListener("click", () => {
+    reinitialiser();
+    boiteDepot.scrollIntoView({ behavior: "smooth", block: "center" });
+});
+</script>
+</body>
+</html>
